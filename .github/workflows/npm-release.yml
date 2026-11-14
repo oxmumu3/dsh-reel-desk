@@ -42,6 +42,8 @@ jobs:
           node --version
           npm --version
       - name: Build, check client bundle, and run unit tests
+        env:
+          REEL_DESK_ALLOW_NON_DARWIN: "1"
         run: npm run build && npm run check:client && npm test
       - name: Pack verified preview tarball
         id: pack
