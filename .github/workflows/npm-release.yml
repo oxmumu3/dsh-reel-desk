@@ -1,0 +1,125 @@
+name: npm release
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "true only after verifying the exact SHA from phase 1"
+        type: choice
+        options: ["false", "true"]
+        default: "false"
+      expected_sha:
+        description: "SHA-256 of the archive from phase 1 (required when publish=true)"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-release-dsh-reel-desk-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'oxmumu3/dsh-reel-desk' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.21.0"
+      - name: Pin npm for trusted publishing
+        run: |
+          set -eu
+          npm install -g npm@11.15.0 --ignore-scripts --no-audit --no-fund
+          node --version
+          npm --version
+      - name: Build, check client bundle, and run unit tests
+        run: npm run build && npm run check:client && npm test
+      - name: Pack verified preview tarball
+        id: pack
+        run: |
+          set -eu
+          mkdir -p dist
+          npm pack --ignore-scripts --pack-destination dist
+          cd dist
+          sha256sum ./*.tgz > ARCHIVE.sha256
+          cat ARCHIVE.sha256
+          echo "sha256=$(awk '{print $1}' ARCHIVE.sha256)" >> "$GITHUB_OUTPUT"
+      - id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: reel-desk-archive
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: verify
+    if: >-
+      inputs.publish == 'true' &&
+      github.repository == 'oxmumu3/dsh-reel-desk' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.verify.outputs.artifact_id }}
+          merge-multiple: true
+          path: dist
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.21.0"
+          registry-url: "https://registry.npmjs.org"
+      - name: Pin npm for trusted publishing
+        run: |
+          set -eu
+          npm install -g npm@11.15.0 --ignore-scripts --no-audit --no-fund
+          node --version
+          npm --version
+      - name: Verify exact SHA-256 and package identity
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          VERIFIED_SHA: ${{ needs.verify.outputs.sha256 }}
+        run: |
+          set -eu
+          test -n "${EXPECTED_SHA}"
+          echo "${EXPECTED_SHA}" | grep -Eq '^[0-9a-f]{64}$'
+          actual="$(sha256sum ./dist/*.tgz | awk '{print $1}')"
+          test "${EXPECTED_SHA}" = "${actual}"
+          test "${VERIFIED_SHA}" = "${actual}"
+          tar -xzf ./dist/*.tgz -C dist package/package.json
+          node - <<'NODE'
+          const fs = require('node:fs')
+          const manifest = JSON.parse(fs.readFileSync('dist/package/package.json', 'utf8'))
+          if (manifest.name !== '@oxmumu3/dsh-reel-desk') throw new Error(`unexpected name: ${manifest.name}`)
+          if (manifest.private !== false) throw new Error('manifest is still private')
+          console.log(JSON.stringify({ ok: true, name: manifest.name, version: manifest.version }))
+          NODE
+      - name: Publish exact artifact to npm preview
+        run: npm publish ./dist/*.tgz --ignore-scripts --provenance --access public --tag preview
+      - name: Attach exact tarball to GitHub prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          VERSION="$(node -p "require('./dist/package/package.json').version")"
+          TAG="v${VERSION}"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            remote="$(gh release view "${TAG}" --json assets --jq '.assets[] | select(.name | endswith(".tgz")) | .digest')"
+            test "$remote" = "sha256:$(sha256sum ./dist/*.tgz | awk '{print $1}')"
+          else
+            gh release create "${TAG}" ./dist/*.tgz --prerelease --title "Reel Desk ${VERSION}" --notes "Preview release of @oxmumu3/dsh-reel-desk."
+          fi

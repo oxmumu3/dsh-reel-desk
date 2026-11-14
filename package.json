@@ -1,0 +1,65 @@
+{
+  "name": "@oxmumu3/dsh-reel-desk",
+  "version": "0.1.0-preview.4",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "os": [
+    "darwin"
+  ],
+  "description": "制片台 (Reel Desk) for DeepSeek Harness — storyboard-driven product & explainer video workbench with 8 scene styles, real UI screenshot mockups, live preview, and local 1080p 60fps MP4 export.",
+  "author": "牛村木木山",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oxmumu3/dsh-reel-desk"
+  },
+  "type": "module",
+  "main": "index.js",
+  "engines": {
+    "node": ">=22.0.0",
+    "dsh": "0.2.2-rc.1 || 0.2.2-rc.2 || 0.2.2-rc.3"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib/",
+    "shared/",
+    "cordis.patch.yml",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "check:client": "node scripts/check-client.cjs",
+    "test": "node scripts/run-tests.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-plugin-manager",
+        "@deepseek-ai/dsh-client-ui-workspace",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-tool",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "external": []
+    },
+    "manifestVersion": 1
+  }
+}
