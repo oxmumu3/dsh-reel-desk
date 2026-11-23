@@ -1,6 +1,6 @@
 {
   "name": "@oxmumu3/dsh-reel-desk",
-  "version": "0.1.0-preview.4",
+  "version": "0.1.0-preview.5",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -19,7 +19,7 @@
   "main": "index.js",
   "engines": {
     "node": ">=22.0.0",
-    "dsh": "0.2.2-rc.1 || 0.2.2-rc.2 || 0.2.2-rc.3"
+    "dsh": ">=0.2.2-rc.1 <0.2.4-0"
   },
   "exports": {
     ".": "./index.js",
